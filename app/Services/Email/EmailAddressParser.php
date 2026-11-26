@@ -36,7 +36,7 @@ class EmailAddressParser
         $email = $from instanceof AddressHeader ? $from->getEmail() : null;
         $name = $from instanceof AddressHeader ? mb_trim((string) $from->getPersonName()) : '';
 
-        $email = $loose->email ?? (filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null);
+        $email = self::senderAddress($from->getRawValue()) ?? (filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null);
         $name = $name !== '' ? $name : $loose?->name;
         if ($name === $email) {
             $name = null;
@@ -46,6 +46,20 @@ class EmailAddressParser
         }
 
         return new EmailAddress($email, $name);
+    }
+
+    /**
+     * The address in angle brackets, else the first one outside the quoted name and the comments.
+     * Anyone can write an address in their name: "Jane Doe" (jane@example.com) <john@example.com> is John.
+     */
+    private static function senderAddress(string $from): ?string
+    {
+        $from = (string) preg_replace('/"(?:[^"\\\\]|\\\\.)*"|(?<comment>\((?:[^()\\\\]|\\\\.|(?&comment))*\))/s', ' ', $from);
+        if (preg_match_all('/<([^<>]*)>/', $from, $brackets) > 0) {
+            $from = (string) end($brackets[1]);
+        }
+
+        return (new self($from))->parse()[0]->email ?? null;
     }
 
     /**

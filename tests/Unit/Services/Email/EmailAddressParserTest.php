@@ -112,3 +112,19 @@ test('a sender name written before an unbracketed address is not merged into the
 test('a sender whose name is their address has no name', function (): void {
     expect(parseSender('"john@example.com" <john@example.com>'))->email->toBe('john@example.com')->name->toBeNull();
 });
+
+test('an address written in the sender name is not taken for the sender address', function (string $from): void {
+    expect(parseSender($from))->email->toBe('john@example.com');
+})->with([
+    'quoted name' => ['"jane@example.com" <john@example.com>'],
+    'comment' => ['"Jane Doe" (jane@example.com) <john@example.com>'],
+    'nested comment' => ['Jane Doe (see (jane@example.com)) <john@example.com>'],
+    'quote in a comment' => ['(a " quote) jane@example.com <john@example.com>'],
+    'unquoted name' => ['jane@example.com <john@example.com>'],
+    'unbracketed address' => ['"jane@example.com" john@example.com'],
+    'comment after an unbracketed address' => ['john@example.com (jane@example.com)'],
+]);
+
+test('a sender name written as a comment before the address is kept', function (): void {
+    expect(parseSender('"Jane Doe" (jane@example.com) <john@example.com>'))->email->toBe('john@example.com')->name->toBe('Jane Doe');
+});
