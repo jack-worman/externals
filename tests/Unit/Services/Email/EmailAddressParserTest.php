@@ -119,8 +119,7 @@ test('an address written in the sender name is not taken for the sender address'
     'quoted name' => ['"jane@example.com" <john@example.com>'],
     'comment' => ['"Jane Doe" (jane@example.com) <john@example.com>'],
     'nested comment' => ['Jane Doe (see (jane@example.com)) <john@example.com>'],
-    'quote in a comment' => ['(a " quote) jane@example.com <john@example.com>'],
-    'unquoted name' => ['jane@example.com <john@example.com>'],
+    'quote in a comment' => ['Jane Doe (a " quote, jane@example.com) <john@example.com>'],
     'unbracketed address' => ['"jane@example.com" john@example.com'],
     'comment after an unbracketed address' => ['john@example.com (jane@example.com)'],
 ]);
@@ -128,3 +127,26 @@ test('an address written in the sender name is not taken for the sender address'
 test('a sender name written as a comment before the address is kept', function (): void {
     expect(parseSender('"Jane Doe" (jane@example.com) <john@example.com>'))->email->toBe('john@example.com')->name->toBe('Jane Doe');
 });
+
+test('a sender header with several addresses has no sender address', function (string $from): void {
+    expect(parseSender($from))->email->toBeNull();
+})->with([
+    'two senders' => ['Jane Doe <jane@example.com>, John Doe <john@example.com>'],
+    'a bracketed and an unbracketed sender' => ['Jane Doe <jane@example.com>, john@example.com'],
+    'two unbracketed addresses' => ['jane@example.com john@example.com'],
+    'an address as unquoted name' => ['jane@example.com <john@example.com>'],
+]);
+
+test('a sender address written twice is one address', function (string $from): void {
+    expect(parseSender($from))->email->toBe('john@example.com');
+})->with([
+    'same case' => ['john@example.com <john@example.com>'],
+    'other case' => ['John@Example.com <john@example.com>'],
+]);
+
+test('a malformed sender header has no sender address', function (string $from): void {
+    expect(parseSender($from))->email->toBeNull();
+})->with([
+    'cut by the mail parser in a comment' => ['(jane@example.com ' . str_repeat('a', 5000) . ') <john@example.com>'],
+    'quote left open' => ['"a\\\\" jane@example.com" <john@example.com>'],
+]);

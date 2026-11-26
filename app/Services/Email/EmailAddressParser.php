@@ -33,10 +33,9 @@ class EmailAddressParser
     public static function sender(IHeader $from): ?EmailAddress
     {
         $loose = (new self($from->getRawValue()))->parse()[0] ?? null;
-        $email = $from instanceof AddressHeader ? $from->getEmail() : null;
         $name = $from instanceof AddressHeader ? mb_trim((string) $from->getPersonName()) : '';
 
-        $email = self::senderAddress($from->getRawValue()) ?? (filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null);
+        $email = self::senderAddress($from);
         $name = $name !== '' ? $name : $loose?->name;
         if ($name === $email) {
             $name = null;
@@ -49,17 +48,31 @@ class EmailAddressParser
     }
 
     /**
-     * The address in angle brackets, else the first one outside the quoted name and the comments.
-     * Anyone can write an address in their name: "Jane Doe" (jane@example.com) <john@example.com> is John.
+     * The only address outside the quoted name and the comments: anyone can write an address in their name,
+     * "Jane Doe" (jane@example.com) <john@example.com> is John. Nobody can tell which of several addresses sent it.
      */
-    private static function senderAddress(string $from): ?string
+    private static function senderAddress(IHeader $from): ?string
     {
-        $from = (string) preg_replace('/"(?:[^"\\\\]|\\\\.)*"|(?<comment>\((?:[^()\\\\]|\\\\.|(?&comment))*\))/s', ' ', $from);
-        if (preg_match_all('/<([^<>]*)>/', $from, $brackets) > 0) {
-            $from = (string) end($brackets[1]);
+        $value = preg_replace('/"(?:[^"\\\\]++|\\\\.)*+"|(?<comment>\((?:[^()\\\\]++|\\\\.|(?&comment))*+\))/s', ' ', $from->getRawValue());
+        // A quote or parenthesis left over means a malformed header, or one the mail parser cut short
+        if ($value === null || strpbrk($value, '"()') !== false) {
+            return null;
+        }
+        $addresses = [];
+        foreach ((new self($value))->parse() as $address) {
+            if ($address->email !== null) {
+                $addresses[mb_strtolower($address->email)] = $address->email;
+            }
+        }
+        if ($addresses !== []) {
+            return count($addresses) === 1 ? reset($addresses) : null;
         }
 
-        return (new self($from))->parse()[0]->email ?? null;
+        // The mail parser reads the addresses this parser can't, such as those with a quoted local part
+        $parsed = $from instanceof AddressHeader ? $from->getAddresses() : [];
+        $email = count($parsed) === 1 ? $parsed[0]->getEmail() : null;
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
     }
 
     /**
