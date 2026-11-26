@@ -123,11 +123,6 @@ class EmailSynchronizer
             return null;
         }
         $from = EmailAddressParser::sender($fromHeader);
-        if (! $from) {
-            Log::warning("Cannot synchronize message $number because the 'from' header could not be parsed");
-
-            return null;
-        }
 
         $emailId = $parsedDocument->getHeaderValue('message-id');
 
